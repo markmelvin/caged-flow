@@ -1,0 +1,11 @@
+{
+  "name": "caged-flow",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CAGED system, fretboard notes and improvisation trainer (installable PWA).",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs 8080",
+    "icons": "node tools/make-icons.mjs"
+  }
+}

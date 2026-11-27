@@ -14,20 +14,32 @@ const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 // ---------------------------------------------------------------- routing --
 const ROUTES = { train: renderTrain, explore: renderExplore, jam: renderJamView, progress: renderProgress, guide: renderGuide, settings: renderSettings };
 
+// Drill pages live at #train/<slug>, e.g. #train/build-the-shape.
+const slug = (id) => DRILLS[id].title.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
 function route() {
-  const name = (location.hash.slice(1) || 'train').split('/')[0];
+  const [name, sub] = (location.hash.slice(1) || 'train').split('/');
   if (cleanupView) { try { cleanupView(); } catch {} cleanupView = null; }
   document.querySelectorAll('[data-nav]').forEach((a) => a.classList.toggle('on', a.dataset.nav === name));
   view.innerHTML = '';
   window.scrollTo(0, 0);
-  (ROUTES[name] || renderTrain)();
+  (ROUTES[name] || renderTrain)(sub);
 }
 window.addEventListener('hashchange', route);
+// A link to the current #train fires no hashchange, so re-route by hand to leave a running drill or workout.
+// Other pages keep their state (a playing jam, the tuner); modified clicks open a new tab instead.
+document.addEventListener('click', (e) => {
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+  const a = e.target.closest('a[href="#train"]');
+  if (a && location.hash === '#train') route();
+});
 // Unlock audio on first interaction (mobile browsers require a gesture).
 window.addEventListener('pointerdown', () => audio(), { once: true });
 
 // ------------------------------------------------------------------ Train --
-function renderTrain() {
+function renderTrain(sub) {
+  const drill = sub && Object.keys(DRILLS).find((id) => slug(id) === sub);
+  if (drill) return renderDrillSetup(drill);
   const t = S.totals();
   const plan = workoutPlan();
   const st = S.streak();
@@ -50,11 +62,11 @@ function renderTrain() {
     <h2 class="section-title">Drills</h2>
     <div class="drill-grid">
       ${Object.entries(DRILLS).map(([id, d]) => `
-        <button class="drill-card card" data-drill="${id}">
+        <a class="drill-card card" href="#train/${slug(id)}">
           <span class="drill-icon">${d.icon}</span>
           <span class="drill-name">${d.title}</span>
           <span class="drill-blurb">${d.blurb}</span>
-        </button>`).join('')}
+        </a>`).join('')}
       <a class="drill-card card" href="#jam">
         <span class="drill-icon">🎸</span><span class="drill-name">Jam & Improvise</span>
         <span class="drill-blurb">Backing tracks in any key. The neck shows your position, the chord tones to aim for, and what's coming next.</span>
@@ -62,7 +74,6 @@ function renderTrain() {
     </div>
     <p class="muted small center">New to CAGED? Start with the <a href="#guide">Guide</a>, then explore the shapes in <a href="#explore">Explore</a>.</p>`;
   view.querySelector('[data-a=workout]').onclick = () => runWorkout(plan);
-  view.querySelectorAll('[data-drill]').forEach((b) => (b.onclick = () => renderDrillSetup(b.dataset.drill)));
 }
 
 function renderDrillSetup(id) {
@@ -86,7 +97,7 @@ function renderDrillSetup(id) {
         ${opts.input === 'mic' ? `<p class="note">🎤 Use headphones or a quiet room. Pitch detection works best with single, clean notes${micSupported() ? '' : '. <b>Your browser has no microphone support.</b>'}</p>` : ''}
         <div class="actions"><button class="btn primary big" data-a="start">Start ▶</button></div>
       </div>`;
-    view.querySelector('[data-a=back]').onclick = () => renderTrain();
+    view.querySelector('[data-a=back]').onclick = () => (location.hash = 'train');
     view.querySelectorAll('[data-o]').forEach((b) => (b.onclick = () => {
       const o = d.options.find((x) => x.id === b.dataset.o);
       const v = JSON.parse(b.dataset.v);
@@ -313,7 +324,7 @@ function renderProgress() {
         <p class="muted small">From <i>Build the Shape</i> (score 0–100).</p>
         <div class="table-wrap"><table class="mastery">
           <tr><th></th>${T.SHAPE_ORDER.map((s) => `<th class="shape-${s}">${s}</th>`).join('')}</tr>
-          ${shapeScales.filter((sc) => T.SHAPE_ORDER.some((s) => S.item('shape-' + sc, s))).map((sc) => `<tr><td class="rowh">${T.SCALES[sc].short}</td>${T.SHAPE_ORDER.map((s) => cell(S.mastery('shape-' + sc, s, 25000))).join('')}</tr>`).join('') || `<tr><td colspan="6" class="muted">No shapes built yet. Try <a href="#train">Build the Shape</a>.</td></tr>`}
+          ${shapeScales.filter((sc) => T.SHAPE_ORDER.some((s) => S.item('shape-' + sc, s))).map((sc) => `<tr><td class="rowh">${T.SCALES[sc].short}</td>${T.SHAPE_ORDER.map((s) => cell(S.mastery('shape-' + sc, s, 25000))).join('')}</tr>`).join('') || `<tr><td colspan="6" class="muted">No shapes built yet. Try <a href="#train/${slug('shapeBuilder')}">Build the Shape</a>.</td></tr>`}
           <tr><td class="rowh">Locate</td>${T.SHAPE_ORDER.map((s) => cell(S.mastery('locate', s, 3000))).join('')}</tr>
           <tr><td class="rowh">Recognise</td>${T.SHAPE_ORDER.map((s) => cell(S.mastery('nameshape', s, 3000))).join('')}</tr>
         </table></div>

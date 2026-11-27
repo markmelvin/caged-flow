@@ -252,7 +252,7 @@ export const DRILLS = {
       const o = ctx.opts;
       const sc = T.SCALES[o.scale];
       const useMic = o.input === 'mic';
-      let cur, last, placed, checked, seq, seqIdx, slips, lastWrong, lastMatch;
+      let cur, last, placed, checked, seq, seqIdx, top, slips, lastWrong, lastMatch;
 
       const build = () => {
         for (let tries = 0; tries < 40; tries++) {
@@ -268,7 +268,7 @@ export const DRILLS = {
       const notesOf = (inst) => T.notesInShape(inst, cur.tonic, sc.ints, cur.ref, ctx.frets);
       const showRoots = () => o.hints !== 'none';
 
-      return {
+      const impl = {
         next() {
           cur = build();
           last = cur.shapeId;
@@ -281,6 +281,7 @@ export const DRILLS = {
           if (useMic) {
             const asc = [...cur.notes].sort((a, b) => a.midi - b.midi);
             seq = asc.concat(asc.slice(0, -1).reverse());
+            top = asc.length - 1;
             seqIdx = 0; slips = 0; lastWrong = null; lastMatch = null;
             ctx.actions([{ label: 'Skip', fn: () => this.reveal(false) }]);
           } else {
@@ -303,7 +304,8 @@ export const DRILLS = {
             notes.push({ s, f, cls: 'user' });
           }
           if (useMic) {
-            for (let i = 0; i < seqIdx; i++) notes.push({ s: seq[i].s, f: seq[i].f, cls: 'correct', label: T.INTERVALS[seq[i].interval] });
+            // On the way down only the descent is lit, so progress stays visible.
+            for (let i = seqIdx > top ? top : 0; i < seqIdx; i++) notes.push({ s: seq[i].s, f: seq[i].f, cls: 'correct', label: T.INTERVALS[seq[i].interval] });
           }
           const windows = o.hints === 'window' ? [{ win: cur.inst.win, color: T.SHAPE_COLORS[cur.shapeId] }] : [];
           ctx.draw({ notes, windows });
@@ -369,6 +371,7 @@ export const DRILLS = {
             seqIdx++;
             lastWrong = null;
             this.render();
+            if (seqIdx === top + 1 && seqIdx < seq.length) ctx.flash('Now back down ↓', true);
             if (seqIdx >= seq.length) {
               checked = true;
               ctx.result(slips <= 1, `shape-${o.scale}`, cur.shapeId);
@@ -380,8 +383,9 @@ export const DRILLS = {
             slips++;
           }
         },
-        useMic,
       };
+      if (useMic) ctx.listen((p) => impl.onPitch(p));
+      return impl;
     },
   },
 
